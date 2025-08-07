@@ -31,12 +31,15 @@ func main() {
 	}
 
 	entries := fetchEntries(token, team)
+	currentTask := hasOngoingTask(token, team)
+
+	if currentTask != nil {
+		entries = append(entries, *currentTask)
+	}
 
 	total := sumEntries(entries)
 	hours := math.Floor(total.Hours())
 	minutes := math.Floor(total.Minutes() - (hours)*60)
-
-	hasTask := hasOngoingTask(token, team)
 
 	overtimeFlag := ""
 	if hours >= 8 {
@@ -44,7 +47,7 @@ func main() {
 	}
 
 	ongoingFlag := ""
-	if hasTask == true {
+	if currentTask != nil {
 		ongoingFlag = " [+]"
 	}
 
@@ -113,15 +116,18 @@ func sumEntries(entries []Entry) time.Duration {
 
 	for _, entry := range entries {
 		start, _ := strconv.Atoi(entry.Start)
-		end, _ := strconv.Atoi(entry.End)
+		end := int(time.Now().Unix() * 1000)
+		if entry.End != nil {
+			end, _ = strconv.Atoi(*entry.End)
+		}
 
-		durMs += int(end - start)
+		durMs += int(math.Abs(float64(end)) - math.Abs(float64(start)))
 	}
 
 	return time.Duration(durMs) * time.Millisecond
 }
 
-func hasOngoingTask(token string, team string) bool {
+func hasOngoingTask(token string, team string) *Entry {
 	clickupApiUrl := "https://api.clickup.com/api/v2"
 
 	reqUrl := fmt.Sprintf(
@@ -160,12 +166,12 @@ func hasOngoingTask(token string, team string) bool {
 		log.Fatal("Failed to parse response body")
 	}
 
-	return data.Data != nil
+	return data.Data
 }
 
 type Entry struct {
-	Start string `json:"start"`
-	End   string `json:"end"`
+	Start string  `json:"start"`
+	End   *string `json:"end"`
 }
 
 type ClickUpEntriesResponse struct {
@@ -173,5 +179,5 @@ type ClickUpEntriesResponse struct {
 }
 
 type ClickUpCurrentTaskResponse struct {
-	Data *any `json:"data"`
+	Data *Entry `json:"data"`
 }
